@@ -47,6 +47,8 @@ FROM (
 ) duplicates
 WHERE row_num > 1;
 
+SET SQL_SAFE_UPDATES = 0;
+
 -- Menghapus data duplikat dengan metode CTE (Common Table Expression)
 WITH DELETE_CTE AS (
 	SELECT company, location, industry, total_laid_off, percentage_laid_off, `date`, stage, country, funds_raised_millions, 
@@ -58,6 +60,8 @@ WHERE (company, location, industry, total_laid_off, percentage_laid_off, `date`,
 	SELECT company, location, industry, total_laid_off, percentage_laid_off, `date`, stage, country, funds_raised_millions, row_num
 	FROM DELETE_CTE
 ) AND row_num > 1;
+
+SET SQL_SAFE_UPDATES = 1;
 
 -- Alternatif lain: menambahkan kolom row_num untuk membantu proses penghapusan
 ALTER TABLE world_layoffs.layoffs_staging ADD row_num INT;
@@ -88,9 +92,15 @@ SELECT `company`, `location`, `industry`, `total_laid_off`, `percentage_laid_off
 		) AS row_num
 	FROM world_layoffs.layoffs_staging;
 
+
+
 -- Menghapus duplikasi dengan row_num lebih dari 1
+SET SQL_SAFE_UPDATES = 0;
+
 DELETE FROM world_layoffs.layoffs_staging2
 WHERE row_num >= 2;
+
+SET SQL_SAFE_UPDATES = 1;
 
 -- 2. Standarisasi Data
 
@@ -104,11 +114,18 @@ SELECT DISTINCT industry FROM world_layoffs.layoffs_staging2 ORDER BY industry;
 SELECT * FROM world_layoffs.layoffs_staging2 WHERE industry IS NULL OR industry = '' ORDER BY industry;
 
 -- Mengubah nilai kosong menjadi NULL agar lebih mudah diolah
+SET SQL_SAFE_UPDATES = 0;
+
 UPDATE world_layoffs.layoffs_staging2
 SET industry = NULL
 WHERE industry = '';
 
+SET SQL_SAFE_UPDATES = 1;
+
+
 -- Mengisi industry yang kosong berdasarkan data perusahaan yang sama
+SET SQL_SAFE_UPDATES = 0;
+
 UPDATE layoffs_staging2 t1
 JOIN layoffs_staging2 t2
 ON t1.company = t2.company
@@ -116,10 +133,16 @@ SET t1.industry = t2.industry
 WHERE t1.industry IS NULL
 AND t2.industry IS NOT NULL;
 
+SET SQL_SAFE_UPDATES = 1;
+
 -- Standarisasi nama industry yang tidak konsisten (misalnya Crypto)
+SET SQL_SAFE_UPDATES = 0;
+
 UPDATE layoffs_staging2
 SET industry = 'Crypto'
 WHERE industry IN ('Crypto Currency', 'CryptoCurrency');
+
+SET SQL_SAFE_UPDATES = 1;
 
 -- Mengecek kembali nilai unik dalam kolom industry setelah standarisasi
 SELECT DISTINCT industry FROM world_layoffs.layoffs_staging2 ORDER BY industry;
@@ -128,19 +151,31 @@ SELECT DISTINCT industry FROM world_layoffs.layoffs_staging2 ORDER BY industry;
 SELECT DISTINCT country FROM world_layoffs.layoffs_staging2 ORDER BY country;
 
 -- Menghapus titik di akhir nama negara jika ada
+SET SQL_SAFE_UPDATES = 0;
+
 UPDATE layoffs_staging2
 SET country = TRIM(TRAILING '.' FROM country);
+
+SET SQL_SAFE_UPDATES = 1;
 
 -- Mengecek hasil standarisasi nama negara
 SELECT DISTINCT country FROM world_layoffs.layoffs_staging2 ORDER BY country;
 
 -- Standarisasi format tanggal
+SET SQL_SAFE_UPDATES = 0;
+
 UPDATE layoffs_staging2
 SET `date` = STR_TO_DATE(`date`, '%m/%d/%Y');
 
+SET SQL_SAFE_UPDATES = 1;
+
 -- Mengubah tipe data kolom tanggal menjadi DATE
+SET SQL_SAFE_UPDATES = 0;
+
 ALTER TABLE layoffs_staging2
 MODIFY COLUMN `date` DATE;
+
+SET SQL_SAFE_UPDATES = 1;
 
 -- Mengecek data setelah perubahan format tanggal
 SELECT * FROM world_layoffs.layoffs_staging2;
@@ -156,6 +191,8 @@ SELECT * FROM world_layoffs.layoffs_staging2;
 SELECT * FROM world_layoffs.layoffs_staging2 WHERE total_laid_off IS NULL;
 
 -- Menghapus baris yang tidak memiliki nilai total_laid_off dan percentage_laid_off
+SET SQL_SAFE_UPDATES = 0;
+
 DELETE FROM world_layoffs.layoffs_staging2
 WHERE total_laid_off IS NULL
 AND percentage_laid_off IS NULL;
@@ -163,6 +200,24 @@ AND percentage_laid_off IS NULL;
 -- Menghapus kolom row_num yang tidak lagi diperlukan
 ALTER TABLE layoffs_staging2
 DROP COLUMN row_num;
+
+SET SQL_SAFE_UPDATES = 1;
+
+-- menghapus data NULL
+SET SQL_SAFE_UPDATES = 0;
+
+DELETE FROM world_layoffs.layoffs_staging2
+WHERE company IS NULL OR company = ''
+   OR location IS NULL OR location = ''
+   OR industry IS NULL OR industry = ''
+   OR total_laid_off IS NULL
+   OR percentage_laid_off IS NULL OR percentage_laid_off = ''
+   OR date IS NULL
+   OR stage IS NULL OR stage = ''
+   OR country IS NULL OR country = ''
+   OR funds_raised_millions IS NULL;
+
+SET SQL_SAFE_UPDATES = 1;
 
 -- Menampilkan data akhir setelah proses pembersihan selesai
 SELECT * FROM world_layoffs.layoffs_staging2;
